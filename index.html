@@ -275,7 +275,7 @@ textarea.textin{resize:vertical;min-height:84px;line-height:1.45;font-family:inh
 <body>
 <div class="wrap">
   <header>
-    <div class="toprow"><span class="brand">Daybook</span><span class="status" id="status">Loading…</span></div>
+    <div class="toprow"><span class="brand">Daybook</span><span class="status"><span id="status">Loading…</span> <button class="link" id="authBtn" style="font-size:13px" hidden></button></span></div>
     <nav role="tablist">
       <button role="tab" data-view="today" aria-selected="true">Tonight</button>
       <button role="tab" data-view="year" aria-selected="false">Year</button>
@@ -372,6 +372,9 @@ textarea.textin{resize:vertical;min-height:84px;line-height:1.45;font-family:inh
   <div class="sv-body" id="svBody"></div>
   <div class="sv-foot" id="svFoot"><button class="sv-skip" id="svSkip">Skip</button><button class="sv-next" id="svNext">Next</button></div>
 </div>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"></script>
 <script>
 (function(){
 "use strict";
@@ -480,12 +483,47 @@ function settingsDoc(){return db.doc("data/users/"+uid+"/settings")}
 async function initStore(){
   days=lsGet("daybook.days",{});const ls=lsGet("daybook.settings",null);if(ls&&Array.isArray(ls.items))settings=upgrade(ls);
   render();setStatus("Saved on this device");
-  if(!(window.claude&&typeof window.claude.use==="function"))return;
+  if(!(window.claude&&typeof window.claude.use==="function")){initFirebase();return}
   try{
     const [d,u]=await Promise.all([window.claude.use("db"),window.claude.use("user")]);
     if(!d||!u)return;const id=await u.id();if(!id)return;
     db=d;uid=id;mode="cloud";
-    const [snap,sset]=await Promise.all([daysCol().limit(1000).get(),settingsDoc().get()]);
+    await syncCloud();
+  }catch(e){mode="local";setStatus("Saved on this device")}
+}
+/* Firebase sync for the copy hosted outside claude.ai (GitHub Pages) */
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyAitHBUZGACh33D2asVL_CjD2uYAhWLUrk",
+  authDomain:"daybook-ea1e3.firebaseapp.com",
+  projectId:"daybook-ea1e3",
+  storageBucket:"daybook-ea1e3.firebasestorage.app",
+  messagingSenderId:"1018282228464",
+  appId:"1:1018282228464:web:da8ea624a0afb7f94ca035"
+};
+let fb=false,fbUser=null;
+function initFirebase(){
+  if(!window.firebase)return; // SDK didn't load (offline): stay local-only
+  fb=true;firebase.initializeApp(FIREBASE_CONFIG);
+  firebase.auth().onAuthStateChanged(async u=>{
+    fbUser=u;renderAuth();
+    if(!u){db=null;uid=null;mode="local";setStatus("Saved on this device");return}
+    db=firebase.firestore();uid=u.uid;mode="cloud";setStatus("Syncing…");
+    try{await syncCloud()}catch(e){mode="local";setStatus("Saved on this device")}
+  });
+}
+function renderAuth(){const b=document.getElementById("authBtn");b.hidden=!fb;b.textContent=fbUser?"Sign out":"Sign in to sync"}
+document.getElementById("authBtn").onclick=()=>{
+  if(fbUser){firebase.auth().signOut();return}
+  const p=new firebase.auth.GoogleAuthProvider();
+  firebase.auth().signInWithPopup(p).catch(e=>{
+    if(e&&(e.code==="auth/popup-blocked"||e.code==="auth/operation-not-supported-in-this-environment"))firebase.auth().signInWithRedirect(p);
+    else if(!(e&&e.code==="auth/popup-closed-by-user"||e&&e.code==="auth/cancelled-popup-request"))setStatus("Sign-in failed");
+  });
+};
+// pick up changes made on another device when the app comes back to the front
+document.addEventListener("visibilitychange",()=>{if(document.visibilityState==="visible"&&mode==="cloud"&&db&&uid&&!sv.on&&!sample)syncCloud().catch(()=>{})});
+async function syncCloud(){
+    const [snap,sset]=await Promise.all([(fb?daysCol():daysCol().limit(1000)).get(),settingsDoc().get()]);
     const remote={};snap.docs.forEach(s=>{if(s.exists)remote[s.id]=s.data()});
     const push=[];
     for(const k of Object.keys(days)){const L=days[k],R=remote[k];if(!R||(L.updated||"")>(R.updated||""))push.push(k)}
@@ -497,7 +535,6 @@ async function initStore(){
     lsSet();render();setStatus("Synced");
     for(const k of push)await writeRemote(k);
     if(pushSettings)await writeSettings();
-  }catch(e){mode="local";setStatus("Saved on this device")}
 }
 async function writeRemote(date,retry){
   if(!db||!uid||!days[date])return;
