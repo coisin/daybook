@@ -133,9 +133,10 @@ input[type=range]{width:100%;accent-color:var(--accent);height:28px}
 .metricpick button{flex:none;border:1.5px solid var(--line);background:transparent;border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px;white-space:nowrap}
 .metricpick button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
 .heatscroll{overflow-x:auto;margin-top:10px;padding-bottom:4px}
-.heat{display:grid;grid-auto-flow:column;grid-template-rows:16px repeat(7,13px);gap:3px;width:max-content}
+.heat{--cs:13px;display:grid;grid-auto-flow:column;grid-template-rows:16px repeat(7,var(--cs));gap:3px;width:max-content}
 .heat .mo{font-size:11px;color:var(--muted);white-space:nowrap;grid-row:1}
-.cell{width:13px;height:13px;border-radius:3px;background:var(--cell-empty);border:0;padding:0}
+.rangeseg{margin-top:10px}
+.cell{width:var(--cs);height:var(--cs);border-radius:3px;background:var(--cell-empty);border:0;padding:0}
 .cell.future{background:transparent}
 .cell.sel{outline:2px solid var(--ink);outline-offset:1px}
 .legend{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);margin-top:10px;justify-content:flex-end}
@@ -345,6 +346,7 @@ textarea.textin{resize:vertical;min-height:84px;line-height:1.45;font-family:inh
   <section class="view" id="v-year">
     <div class="block">
       <div class="metricpick" id="metricPick"></div>
+      <div class="seg rangeseg" id="rangeSeg"></div>
       <div class="heatscroll" id="heatScroll"><div class="heat" id="heat"></div></div>
       <div class="legend" id="legend"></div>
       <div class="statrow" id="yearStats"></div>
@@ -412,7 +414,7 @@ const HALF_LIFE=5;
 
 /* ---------- state ---------- */
 let days={}, sample=null, settings={items:DEFAULT_ITEMS.map(x=>({...x})),restPerMonth:2,experiments:[]};
-let cur=todayStr(), hmMetric="happy", selDay=null, target="happy", lag=0;
+let cur=todayStr(), hmMetric="happy", hmRange="1m", selDay=null, target="happy", lag=0;
 let db=null, uid=null, mode="local", editorOpen=false, detailsOpen=false;
 const saveTimers={};let settingsTimer;
 
@@ -778,7 +780,7 @@ function renderStep(){
   }else if(s.id==="caf"){
     body.innerHTML=`<div class="sv-q">Any caffeine today?</div><div class="sv-sub">Add each drink and fix the time if needed.</div><div class="svchips">${Object.entries(CAFF).map(([k,c])=>`<button data-c="${k}">+ ${c.label}</button>`).join("")}</div><ul class="svcaf">${(d.caffeine||[]).map((c,i)=>`<li><b>${CAFF[c.type].label}</b><span><input type="time" value="${c.t}" data-i="${i}" aria-label="Time"><button class="x" data-i="${i}" aria-label="Remove">×</button></span></li>`).join("")}</ul>
     <div class="timerow"><label for="svbed">Going to bed around</label><input type="time" id="svbed" value="${d.bed||(p&&p.bed)||"23:30"}"></div>
-    <div style="background:var(--night-chip);border-radius:14px;padding:14px;margin-top:14px">${decayHTML(d,"#F1E7C6","#F1E7C6")}</div>`;
+    <div id="svdecay" style="background:var(--night-chip);border-radius:14px;padding:14px;margin-top:14px">${decayHTML(d,"#F1E7C6","#F1E7C6")}</div>`;
     skip.textContent="None today";
   }else if(s.id==="counts"){
     body.innerHTML=`<div class="sv-q">Food and drink</div><div class="sv-sub">Rough is fine. Tap again to clear.</div><div class="svlist">${choiceHTML(d,"svchoice")}${COUNTERS.map(c=>`<div class="svcount" data-k="${c.k}"><span class="nm">${c.label}</span><span class="ctl"><button data-d="-1" aria-label="Less ${c.label}">−</button><span class="v">${d[c.k]||0}</span><button data-d="1" aria-label="More ${c.label}">+</button></span></div>`).join("")}</div>`;
@@ -849,8 +851,10 @@ document.getElementById("svBody").addEventListener("click",e=>{
 });
 document.getElementById("svBody").addEventListener("change",e=>{
   const el=e.target;
-  if(el.id==="svbed"&&el.value){edit(x=>{x.bed=el.value},sv.date);renderStep();return}
-  if(el.matches(".svcaf input[type=time]")&&el.value){const i=Number(el.dataset.i);edit(x=>{x.caffeine=x.caffeine.map((c,j)=>j===i?{...c,t:el.value}:c)},sv.date);renderStep()}
+  // Update only the chart, not the whole step: re-rendering replaces the input and closes its picker mid-edit.
+  const refreshDecay=()=>{const dc=document.getElementById("svdecay");if(dc)dc.innerHTML=decayHTML(entry(sv.date),"#F1E7C6","#F1E7C6")};
+  if(el.id==="svbed"&&el.value){edit(x=>{x.bed=el.value},sv.date);refreshDecay();return}
+  if(el.matches(".svcaf input[type=time]")&&el.value){const i=Number(el.dataset.i);edit(x=>{x.caffeine=x.caffeine.map((c,j)=>j===i?{...c,t:el.value}:c)},sv.date);refreshDecay()}
 });
 
 /* ---------- heatmap ---------- */
@@ -890,17 +894,23 @@ function colorFor(m,val){
   }
   return `rgba(${m.hue},${(.18+t*.82).toFixed(2)})`;
 }
+const HM_RANGES=[{k:"1m",label:"1 month",weeks:5,cell:26},{k:"3m",label:"3 months",weeks:14,cell:18},{k:"6m",label:"6 months",weeks:27,cell:13},{k:"1y",label:"1 year",weeks:53,cell:13}];
 function renderYear(){
   const HM=heatMetrics();if(!HM.find(x=>x.k===hmMetric))hmMetric="happy";
   const m=HM.find(x=>x.k===hmMetric);
   document.getElementById("metricPick").innerHTML=HM.map(x=>`<button data-m="${x.k}" aria-pressed="${x.k===hmMetric}">${esc(x.label)}</button>`).join("");
+  const rg=HM_RANGES.find(r=>r.k===hmRange)||HM_RANGES[0];
+  document.getElementById("rangeSeg").innerHTML=HM_RANGES.map(r=>`<button data-r="${r.k}" aria-pressed="${r.k===rg.k}">${r.label}</button>`).join("");
   const today=parse(todayStr());
   const end=new Date(today);end.setDate(end.getDate()+(6-((end.getDay()+6)%7)));
-  const start=new Date(end);start.setDate(start.getDate()-53*7+1);
+  const weeks=rg.weeks;
+  const start=new Date(end);start.setDate(start.getDate()-weeks*7+1);
   let html="",lastMo=-1;const store=data();
-  for(let w=0;w<53;w++){
+  for(let w=0;w<weeks;w++){
     const ws=new Date(start);ws.setDate(ws.getDate()+w*7);const mo=ws.getMonth();
-    html+=`<span class="mo" style="grid-column:${w+1}">${mo!==lastMo&&ws.getDate()<=7?ws.toLocaleDateString(undefined,{month:"short"}):""}</span>`;
+    // Label the first column too when it's early enough in the month not to collide with the next label.
+    const lbl=(mo!==lastMo&&ws.getDate()<=7)||(w===0&&ws.getDate()<=21);
+    html+=`<span class="mo" style="grid-column:${w+1}">${lbl?ws.toLocaleDateString(undefined,{month:"short"}):""}</span>`;
     if(ws.getDate()<=7)lastMo=mo;
     for(let r=0;r<7;r++){
       const d=new Date(ws);d.setDate(d.getDate()+r);const s=ds(d);
@@ -910,7 +920,7 @@ function renderYear(){
       html+=`<button class="cell${s===selDay?" sel":""}" data-d="${s}" title="${esc(tip)}" aria-label="${esc(tip)}" style="grid-column:${w+1};grid-row:${r+2}${c?";background:"+c:""}"></button>`;
     }
   }
-  document.getElementById("heat").innerHTML=html;
+  const heat=document.getElementById("heat");heat.innerHTML=html;heat.style.setProperty("--cs",rg.cell+"px");
   const sc=document.getElementById("heatScroll");sc.scrollLeft=sc.scrollWidth;
   const lg=document.getElementById("legend");
   if(m.kind==="bin")lg.innerHTML=`No <i style="background:var(--cell-empty)"></i>${m.item&&m.item.kind==="todo"?`<i style="background:rgba(${m.hue},.45)"></i>`:""}<i style="background:rgb(${m.hue})"></i> ${m.item&&m.item.kind==="todo"?"Full":"Yes"}`;
@@ -1109,7 +1119,7 @@ document.getElementById("counters").addEventListener("click",e=>{const b=e.targe
 document.getElementById("habits").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;if(b.dataset.rest){edit(d=>{d.rest=!d.rest});renderDetails();return}const k=b.dataset.k;const it=items().find(i=>i.id===k);edit(d=>{if(it&&it.kind==="todo")cycle(d,k);else{d.habits=Object.assign({},d.habits);d.habits[k]=!d.habits[k]}});renderDetails()});
 document.getElementById("cafBtns").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const t=cur===todayStr()?nowT():"12:00";edit(d=>{d.caffeine=(d.caffeine||[]).concat([{type:b.dataset.c,t}])});renderCaffeine(entry(cur))});
 document.getElementById("cafList").addEventListener("click",e=>{const b=e.target.closest("button.x");if(!b)return;const i=Number(b.dataset.i);edit(d=>{d.caffeine=d.caffeine.filter((_,j)=>j!==i)});renderCaffeine(entry(cur))});
-document.getElementById("cafList").addEventListener("change",e=>{const inp=e.target.closest("input[type=time]");if(!inp||!inp.value)return;const i=Number(inp.dataset.i);edit(d=>{d.caffeine=d.caffeine.map((c,j)=>j===i?{...c,t:inp.value}:c)});renderCaffeine(entry(cur))});
+document.getElementById("cafList").addEventListener("change",e=>{const inp=e.target.closest("input[type=time]");if(!inp||!inp.value)return;const i=Number(inp.dataset.i);edit(d=>{d.caffeine=d.caffeine.map((c,j)=>j===i?{...c,t:inp.value}:c)});document.getElementById("decay").innerHTML=decayHTML(entry(cur),"rgb(150,96,46)","currentColor")});
 document.getElementById("bed").addEventListener("change",e=>{if(!e.target.value)return;edit(d=>{d.bed=e.target.value});renderCaffeine(entry(cur))});
 let noteT;document.getElementById("note").addEventListener("input",e=>{const v=e.target.value;clearTimeout(noteT);noteT=setTimeout(()=>edit(d=>{d.note=v}),400)});
 document.getElementById("choiceRows").addEventListener("click",e=>{const b=e.target.closest("button[data-ck]");if(!b)return;const k=b.dataset.ck,v=Number(b.dataset.cv);edit(x=>{x[k]=x[k]===v?null:v});renderDetails()});
@@ -1118,6 +1128,7 @@ document.getElementById("sickSeg").addEventListener("click",e=>{const b=e.target
 function setTags(str){const tags=[...new Set(str.split(",").map(s=>s.trim().toLowerCase().replace(/^#/,"")).filter(Boolean))];edit(d=>{d.tags=tags})}
 document.getElementById("tags").addEventListener("change",e=>{setTags(e.target.value);renderTagChips(entry(cur))});
 document.getElementById("tagchips").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;const inp=document.getElementById("tags");inp.value=(inp.value.trim()?inp.value.replace(/,\s*$/,"")+", ":"")+b.dataset.t;setTags(inp.value);renderTagChips(entry(cur))});
+document.getElementById("rangeSeg").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;hmRange=b.dataset.r;renderYear()});
 document.getElementById("metricPick").addEventListener("click",e=>{const b=e.target.closest("button");if(!b)return;hmMetric=b.dataset.m;const mp=document.getElementById("metricPick");const sl=mp.scrollLeft;renderYear();mp.scrollLeft=sl});
 document.getElementById("heat").addEventListener("click",e=>{const b=e.target.closest("button.cell");if(!b)return;selDay=selDay===b.dataset.d?null:b.dataset.d;document.querySelectorAll(".cell.sel").forEach(c=>c.classList.remove("sel"));if(selDay)b.classList.add("sel");renderDayDetail()});
 document.getElementById("dayDetail").addEventListener("click",e=>{const b=e.target.closest("[data-editday]");if(!b)return;cur=b.dataset.editday;detailsOpen=true;show("today")});
