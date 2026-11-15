@@ -133,7 +133,7 @@ input[type=range]{width:100%;accent-color:var(--accent);height:28px}
 .metricpick button{flex:none;border:1.5px solid var(--line);background:transparent;border-radius:999px;padding:6px 12px;font-weight:700;font-size:14px;white-space:nowrap}
 .metricpick button[aria-pressed="true"]{border-color:var(--ink);background:var(--ink);color:var(--bg)}
 .heatscroll{overflow-x:auto;margin-top:10px;padding-bottom:4px}
-.heat{--cs:13px;--gap:3px;display:grid;grid-auto-flow:column;grid-auto-columns:var(--cs);grid-template-rows:16px repeat(7,var(--cs));gap:var(--gap);width:max-content}
+.heat{--cs:13px;display:grid;grid-auto-flow:column;grid-template-rows:16px repeat(7,var(--cs));gap:3px;width:max-content}
 .heat .mo{font-size:11px;color:var(--muted);white-space:nowrap;grid-row:1}
 .rangeseg{margin-top:10px}
 .cell{width:var(--cs);height:var(--cs);border-radius:3px;background:var(--cell-empty);border:0;padding:0}
@@ -920,13 +920,8 @@ function renderYear(){
       html+=`<button class="cell${s===selDay?" sel":""}" data-d="${s}" title="${esc(tip)}" aria-label="${esc(tip)}" style="grid-column:${w+1};grid-row:${r+2}${c?";background:"+c:""}"></button>`;
     }
   }
-  const heat=document.getElementById("heat");heat.innerHTML=html;
-  const sc=document.getElementById("heatScroll");
-  // Fit the whole range to the available width; only fall back to scrolling below a minimum cell size.
-  const gap=rg.weeks>30?2:3,fit=Math.floor((sc.clientWidth-(weeks-1)*gap)/weeks);
-  const cs=Math.max(8,Math.min(rg.cell,fit||rg.cell));
-  heat.style.setProperty("--cs",cs+"px");heat.style.setProperty("--gap",gap+"px");
-  sc.scrollLeft=sc.scrollWidth;
+  const heat=document.getElementById("heat");heat.innerHTML=html;heat.style.setProperty("--cs",rg.cell+"px");
+  const sc=document.getElementById("heatScroll");sc.scrollLeft=sc.scrollWidth;
   const lg=document.getElementById("legend");
   if(m.kind==="bin")lg.innerHTML=`No <i style="background:var(--cell-empty)"></i>${m.item&&m.item.kind==="todo"?`<i style="background:rgba(${m.hue},.45)"></i>`:""}<i style="background:rgb(${m.hue})"></i> ${m.item&&m.item.kind==="todo"?"Full":"Yes"}`;
   else{const steps=[0,.25,.5,.75,1].map(t=>colorFor(m,m.lo+t*(m.hi-m.lo)));lg.innerHTML=`${m.kind==="div"?"Low":"Less"} `+steps.map(c=>`<i style="background:${c}"></i>`).join("")+` ${m.kind==="div"?"High":"More"}`}
