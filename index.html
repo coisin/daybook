@@ -404,7 +404,7 @@ const DEFAULT_ITEMS=[
 
 /* ---------- state ---------- */
 let days={}, sample=null, settings={items:DEFAULT_ITEMS.map(x=>({...x})),restPerMonth:2,experiments:[]};
-let cur=todayStr(), hmMetric="happy", hmRange="1m", selDay=null, target="happy", lag=0;
+let cur=todayStr(), hmMetric="happy", hmRange="3m", selDay=null, target="happy", lag=0;
 let db=null, uid=null, mode="local", editorOpen=false, detailsOpen=false;
 const saveTimers={};let settingsTimer;
 
