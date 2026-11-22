@@ -134,6 +134,9 @@ input[type=range]{width:100%;accent-color:var(--accent);height:28px}
 .cell.future{background:transparent}
 .cell.sel{outline:2px solid var(--ink);outline-offset:1px}
 .legend{display:flex;align-items:center;gap:4px;font-size:12px;color:var(--muted);margin-top:10px;justify-content:flex-end}
+.legend{flex-wrap:wrap}
+.hmsel{margin-right:auto;font-size:14px;color:var(--ink)}
+.hmsel b{font-weight:800}
 .legend i{width:12px;height:12px;border-radius:3px;display:inline-block}
 .statrow{display:flex;gap:22px;flex-wrap:wrap;margin-top:6px}
 .statrow div{font-size:14px;color:var(--muted)}
@@ -404,7 +407,7 @@ const DEFAULT_ITEMS=[
 
 /* ---------- state ---------- */
 let days={}, sample=null, settings={items:DEFAULT_ITEMS.map(x=>({...x})),restPerMonth:2,experiments:[]};
-let cur=todayStr(), hmMetric="happy", hmRange="3m", selDay=null, target="happy", lag=0;
+let cur=todayStr(), hmMetric="happy", hmRange="3m", hmCur=null, selDay=null, target="happy", lag=0;
 let db=null, uid=null, mode="local", editorOpen=false, detailsOpen=false;
 const saveTimers={};let settingsTimer;
 
@@ -877,15 +880,16 @@ function renderYear(){
       const d=new Date(ws);d.setDate(d.getDate()+r);const s=ds(d);
       if(d>today){html+=`<span class="cell future" style="grid-column:${w+1};grid-row:${r+2}"></span>`;continue}
       const e=store[s];const val=e&&hasData(e)?m.v(e,s):null;const c=colorFor(m,val);
-      const tip=d.toLocaleDateString(undefined,{day:"numeric",month:"short"})+(val!=null?": "+(m.kind==="bin"?(m.k==="sick"?(val>=1?"sick":val>0?"a bit off":"healthy"):val>=1?"yes":val>0?"minimum":"no"):(m.fmt?m.fmt(val):val)):"");
+      const fv=fmtVal(m,val);const tip=d.toLocaleDateString(undefined,{day:"numeric",month:"short"})+(fv!=null?": "+fv:"");
       html+=`<button class="cell${s===selDay?" sel":""}" data-d="${s}" title="${esc(tip)}" aria-label="${esc(tip)}" style="grid-column:${w+1};grid-row:${r+2}${c?";background:"+c:""}"></button>`;
     }
   }
   const heat=document.getElementById("heat");heat.innerHTML=html;heat.style.setProperty("--cs",rg.cell+"px");
   const sc=document.getElementById("heatScroll");sc.scrollLeft=sc.scrollWidth;
-  const lg=document.getElementById("legend");
-  if(m.kind==="bin")lg.innerHTML=`No <i style="background:var(--cell-empty)"></i>${m.item&&m.item.kind==="todo"?`<i style="background:rgba(${m.hue},.45)"></i>`:""}<i style="background:rgb(${m.hue})"></i> ${m.item&&m.item.kind==="todo"?"Full":"Yes"}`;
-  else{const steps=[0,.25,.5,.75,1].map(t=>colorFor(m,m.lo+t*(m.hi-m.lo)));lg.innerHTML=`${m.kind==="div"?"Low":"Less"} `+steps.map(c=>`<i style="background:${c}"></i>`).join("")+` ${m.kind==="div"?"High":"More"}`}
+  const lg=document.getElementById("legend");hmCur=m;
+  const selSpan=`<span class="hmsel" id="hmSel"></span>`;
+  if(m.kind==="bin")lg.innerHTML=selSpan+`No <i style="background:var(--cell-empty)"></i>${m.item&&m.item.kind==="todo"?`<i style="background:rgba(${m.hue},.45)"></i>`:""}<i style="background:rgb(${m.hue})"></i> ${m.item&&m.item.kind==="todo"?"Full":"Yes"}`;
+  else{const steps=[0,.25,.5,.75,1].map(t=>colorFor(m,m.lo+t*(m.hi-m.lo)));lg.innerHTML=selSpan+`${m.kind==="div"?"Low":"Less"} `+steps.map(c=>`<i style="background:${c}"></i>`).join("")+` ${m.kind==="div"?"High":"More"}`}
   const vals=Object.entries(store).filter(([k,d])=>hasData(d)).map(([k,d])=>m.v(d,k)).filter(v=>v!=null);
   const avg=vals.length?vals.reduce((a,b)=>a+b,0)/vals.length:null;
   const logged=Object.values(store).filter(hasData).length;
@@ -894,8 +898,17 @@ function renderYear(){
   document.getElementById("yearStats").innerHTML=`<div><b>${streak()}</b>check-in streak</div><div><b>${logged}</b>days logged</div><div><b>${avgTxt}</b>${m.kind==="bin"?"of days":"average"}</div>${third}`;
   renderDayDetail();renderWeek(m);
 }
+// Human-readable value of metric m for a day, or null when nothing was logged.
+function fmtVal(m,val){if(val==null)return null;if(m.kind==="bin")return m.k==="sick"?(val>=1?"sick":val>0?"a bit off":"healthy"):val>=1?"yes":val>0?"minimum":"no";return m.fmt?m.fmt(val):String(Math.round(val*10)/10)}
+function selValTxt(){
+  const m=hmCur;if(!m||!selDay)return "";const e=data()[selDay];
+  const v=fmtVal(m,e&&hasData(e)?m.v(e,selDay):null);
+  return `${esc(m.label)}: <b>${v==null?"not logged":esc(v)}</b>`;
+}
 function renderDayDetail(){
   const el=document.getElementById("dayDetail");
+  const hs=document.getElementById("hmSel");
+  if(hs)hs.innerHTML=selDay?`${parse(selDay).toLocaleDateString(undefined,{weekday:"short",day:"numeric",month:"short"})} · ${selValTxt()}`:"";
   if(!selDay){el.classList.remove("on");return}
   const d=data()[selDay];el.classList.add("on");
   const title=parse(selDay).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"});
