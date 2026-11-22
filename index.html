@@ -688,7 +688,6 @@ function buildSteps(date){
   st.push({id:"scale",k:"energy",q:"How was your energy?",lo:"Drained",hi:"Buzzing"});
   st.push({id:"scale",k:"stress",q:"How stressed were you?",lo:"Calm",hi:"Frazzled"});
   st.push({id:"scale",k:"focus",q:"How focused were you?",lo:"Scattered",hi:"Locked in"});
-  st.push({id:"deep"});
   st.push({id:"caf"});
   st.push({id:"scale",k:"diet",q:"How well did you eat?",lo:"Junk all day",hi:"Really well"});
   st.push({id:"counts"});
@@ -747,9 +746,6 @@ function renderStep(){
     body.innerHTML=`<div class="sv-q">Last night</div><div class="sv-sub">How long you slept, and when you got up this morning.</div>${stepper(v,"h")}
     <div class="timerow"><label for="svwake">Woke up at</label><input type="time" id="svwake" value="${wk}">${p&&p.wake?`<span>planned ${p.wake}</span>`:""}</div>`;
     body.dataset.v=v;
-  }else if(s.id==="deep"){
-    const v=d.deep!=null?d.deep:0;
-    body.innerHTML=`<div class="sv-q">How many hours of deep work?</div><div class="sv-sub">Focused time on things that actually moved forward. Not meetings or email.</div>${stepper(v,"h")}`;
     body.dataset.v=v;
   }else if(s.id==="scale"){
     body.innerHTML=`<div class="sv-q">${s.q}</div><div class="sv-sub">1 to 10.</div><div class="nums">${[1,2,3,4,5,6,7,8,9,10].map(n=>`<button data-n="${n}" class="${d[s.k]===n?"on":""}">${n}</button>`).join("")}</div><div class="ends"><span>${s.lo}</span><span>${s.hi}</span></div>`;
@@ -783,7 +779,7 @@ function renderStep(){
     let mini="";const off=wd(sv.date);const startS=addDays(sv.date,-(28+off));
     for(let i=0;i<35;i++){const s2=addDays(startS,i);if(s2>sv.date){mini+=`<span style="background:transparent"></span>`;continue}const e=days[s2];const sv2=e?score(e,s2):null;const c=sv2!=null?`rgba(241,231,198,${(.15+sv2*.85).toFixed(2)})`:e&&e.rest?"rgba(157,176,191,.35)":null;mini+=`<span class="${s2===sv.date?"today":""}"${c?` style="background:${c}"`:""}></span>`}
     body.innerHTML=`<div class="sv-sub" style="margin:0 0 6px">${parse(sv.date).toLocaleDateString(undefined,{weekday:"long",day:"numeric",month:"long"})}</div><div class="done-big">${sc!=null?Math.round(sc*100)+"%":"✓"}</div><div class="sv-q" style="font-size:26px;margin-top:8px">${title}</div>
-    <div class="sumgrid"><div><b>${dd.happy??"–"}</b>happiness</div><div><b>${dd.deep!=null?dd.deep+" h":"–"}</b>deep work</div><div><b>${cafCount(dd)}</b>caffeine</div></div>
+    <div class="sumgrid"><div><b>${dd.happy??"–"}</b>happiness</div><div><b>${dd.sleepH!=null?dd.sleepH+" h":"–"}</b>sleep</div><div><b>${cafCount(dd)}</b>caffeine</div></div>
     ${dd.plan&&dd.plan.one?`<div class="quote" style="margin:0 0 18px"><small>Tomorrow’s one thing</small>${esc(dd.plan.one)}<small style="margin-top:6px">Up at ${dd.plan.wake||"–"}, in bed by ${dd.plan.bed||"–"}</small></div>`:""}
     <div class="svgroup" style="margin-top:0">Checklist, last five weeks</div><div class="mini">${mini}</div>
     <p class="sv-sub" style="margin-top:18px">${streak()}-day check-in streak. Sleep well.</p>`;
@@ -801,7 +797,6 @@ function saveText(){
 }
 function svNext(){const s=sv.steps[sv.i];
   if(s.id==="lastnight"){const v=Number(document.getElementById("svBody").dataset.v);edit(x=>{x.sleepH=v},sv.date)}
-  if(s.id==="deep"){const v=Number(document.getElementById("svBody").dataset.v);edit(x=>{x.deep=v},sv.date)}
   if(s.id==="summary"){closeSurvey();return}
   go(1)}
 document.getElementById("svNext").onclick=svNext;
@@ -834,7 +829,6 @@ function heatMetrics(){
     {k:"score",label:"Checklist",kind:"seq",hue:"44,110,112",lo:0,hi:1,v:(d,s)=>score(d,s),fmt:x=>Math.round(x*100)+"%"},
     HMbase.happy,
     {k:"one",label:"One thing done",kind:"bin",hue:"44,110,112",v:(d,s)=>planFor(s)&&d.oneDone!=null?(d.oneDone?1:0):null},
-    {k:"deep",label:"Deep work",kind:"seq",hue:"91,108,214",lo:0,hi:6,v:d=>d.deep,fmt:x=>x+" h"},
     {k:"wake",label:"Wake time",kind:"seq",hue:"224,164,35",lo:10,hi:6,v:d=>d.wake?toH(d.wake):null,fmt:x=>fmtH(x)},
     {k:"energy",label:"Energy",kind:"seq",hue:"224,164,35",lo:1,hi:10,v:d=>d.energy},
     {k:"stress",label:"Stress",kind:"seq",hue:"201,72,60",lo:1,hi:10,v:d=>d.stress},
@@ -910,7 +904,7 @@ function renderDayDetail(){
   const t=dailyTodos(selDay),dn=t.filter(i=>done(d,i.id));const pp=planFor(selDay);
   const hab=items().filter(h=>done(d,h.id)).map(h=>h.label+(hv(d,h.id)==="min"?" (minimum)":"")).join(", ");
   el.innerHTML=`<h3>${title}</h3>${pp?`<p class="hint" style="margin:4px 0 0">One thing: ${esc(pp.one)} ${d.oneDone==null?"":d.oneDone?"✓":"✗"}</p>`:""}${d.note?`<p style="margin:6px 0 0;white-space:pre-wrap"><b>Best part:</b> ${esc(d.note)}</p>`:""}${d.bad?`<p style="margin:6px 0 0;white-space:pre-wrap"><b>Went wrong:</b> ${esc(d.bad)}</p>`:""}
-  <div class="dgrid">${t.length?`<div>Checklist <b>${dn.length}/${t.length}</b></div>`:""}${d.rest?`<div><b>Rest day</b></div>`:""}${d.sick===2?`<div><b>Sick</b></div>`:d.sick===1?`<div><b>A bit off</b></div>`:""}${f("happy","Happiness")}${f("energy","Energy")}${f("stress","Stress")}${f("focus","Focus")}${f("deep","Deep work"," h")}${f("wake","Woke")}${f("sleepH","Sleep"," h")}${f("sleepQ","Sleep quality")}${f("diet","Ate well")}
+  <div class="dgrid">${t.length?`<div>Checklist <b>${dn.length}/${t.length}</b></div>`:""}${d.rest?`<div><b>Rest day</b></div>`:""}${d.sick===2?`<div><b>Sick</b></div>`:d.sick===1?`<div><b>A bit off</b></div>`:""}${f("happy","Happiness")}${f("energy","Energy")}${f("stress","Stress")}${f("focus","Focus")}${f("wake","Woke")}${f("sleepH","Sleep"," h")}${f("sleepQ","Sleep quality")}${f("diet","Ate well")}
   <div>Caffeine <b>${drinksTxt(cafCount(d))}</b></div>${d.alcohol?`<div>Alcohol <b>${d.alcohol}</b></div>`:""}</div>
   ${hab?`<p class="hint" style="margin:0 0 10px">${esc(hab)}</p>`:""}${(d.tags||[]).length?`<p class="hint" style="margin:0 0 10px">Tags: ${esc(d.tags.join(", "))}</p>`:""}
   ${sample||selDay<addDays(todayStr(),-1)?"":`<button class="btn" data-editday="${selDay}">Edit this day</button>`}`;
@@ -928,11 +922,10 @@ function renderWeek(m){
 }
 
 /* ---------- insights ---------- */
-const TARGETS=[{k:"happy",label:"Happiness"},{k:"energy",label:"Energy"},{k:"focus",label:"Focus"},{k:"stress",label:"Stress"},{k:"sleepQ",label:"Sleep quality"},{k:"deep",label:"Deep work"}];
+const TARGETS=[{k:"happy",label:"Happiness"},{k:"energy",label:"Energy"},{k:"focus",label:"Focus"},{k:"stress",label:"Stress"},{k:"sleepQ",label:"Sleep quality"}];
 function factors(){
   const f=items().map(h=>({label:h.label,test:d=>(h.kind==="todo"&&(!scheduled(h,d.date)||off(d)))?null:done(d,h.id)}));
   f.push({label:"Did the one thing",test:d=>d.oneDone==null?null:d.oneDone});
-  f.push({label:"Deep work 3 h or more",test:d=>d.deep==null?null:d.deep>=3});
   f.push({label:"Woke before 7:30",test:d=>d.wake?toH(d.wake)<7.5:null});
   f.push({label:"Rest day",test:d=>!!d.rest});
   f.push({label:"Feeling unwell",test:d=>d.sick==null?null:d.sick>0});
@@ -960,9 +953,9 @@ function renderBest(){
     if(pt>=.5&&pt-pa>=.12)rows.push({label:f.label,pt,pa});
   }
   rows.sort((a,b)=>(b.pt-b.pa)-(a.pt-a.pa));
-  const sl=top.map(d=>d.sleepH).filter(v=>v!=null),dp=top.map(d=>d.deep).filter(v=>v!=null);
+  const sl=top.map(d=>d.sleepH).filter(v=>v!=null);
   const avg=a=>a.reduce((p,c)=>p+c,0)/a.length;
-  el.innerHTML=`<h2>Your best-day recipe</h2><p class="hint" style="margin:0 0 12px">What your ${n} happiest days had in common, compared with all your days.${(()=>{const pr=[];if(sl.length)pr.push(`${avg(sl).toFixed(1)} h of sleep`);if(dp.length)pr.push(`${avg(dp).toFixed(1)} h of deep work`);return pr.length?" They averaged "+pr.join(" and ")+".":""})()}</p>${rows.length?`<ul class="recipe">${rows.slice(0,6).map(r=>`<li><b>${esc(r.label)}</b><span>${Math.round(r.pt*100)}% of best days vs ${Math.round(r.pa*100)}% overall</span></li>`).join("")}</ul>`:`<p class="hint">Nothing stands out yet.</p>`}`;
+  el.innerHTML=`<h2>Your best-day recipe</h2><p class="hint" style="margin:0 0 12px">What your ${n} happiest days had in common, compared with all your days.${(()=>{const pr=[];if(sl.length)pr.push(`${avg(sl).toFixed(1)} h of sleep`);return pr.length?" They averaged "+pr.join(" and ")+".":""})()}</p>${rows.length?`<ul class="recipe">${rows.slice(0,6).map(r=>`<li><b>${esc(r.label)}</b><span>${Math.round(r.pt*100)}% of best days vs ${Math.round(r.pa*100)}% overall</span></li>`).join("")}</ul>`:`<p class="hint">Nothing stands out yet.</p>`}`;
 }
 function expRow(x){
   const store=data(),t=todayStr(),end=addDays(x.start,x.len);
@@ -1032,13 +1025,13 @@ function makeSample(){
     if(lateCaf)caffeine.push({type:"mate"});
     const hb=x=>rnd()<x?(rnd()<.25?"min":true):false;
     const rest=!wkend&&rnd()<.04;
-    const d={date,sleepH,caffeine,rest,exp:inEx?{[ex.id]:stuck}:undefined,wake:fmtH((wkend?8.5:7)+(rnd()-.4)*1.2+prevAlc*.2),deep:wkend?Math.round(rnd()*2)/2:Math.round((1.5+rnd()*4-(late?0:.5))*2)/2,plan:{one:["Finish the design doc","Clean the flat","Prep for the interview","Do the tax paperwork","Long climb session","Practise a new tune"][Math.floor(rnd()*6)],wake:wkend?"08:30":"07:00",bed:"23:15"},oneDone:rnd()<.7,bed:wkend?"00:30":"23:15",habits:{duo:hb(.85),gym:gym?(rnd()<.2?"min":true):false,music:hb(.5),read:hb(.55),climb,outside,social,screens:rnd()<.35,late},waterL:[0.5,1.5,1.5,2.5][Math.floor(rnd()*4)],veg:[0,1.5,3.5,5][Math.floor(rnd()*4)],alcohol,sweets:[0,0,1,2][Math.floor(rnd()*4)],tags:[],note:"",done:true};
+    const d={date,sleepH,caffeine,rest,exp:inEx?{[ex.id]:stuck}:undefined,wake:fmtH((wkend?8.5:7)+(rnd()-.4)*1.2+prevAlc*.2),plan:{one:["Finish the design doc","Clean the flat","Prep for the interview","Do the tax paperwork","Long climb session","Practise a new tune"][Math.floor(rnd()*6)],wake:wkend?"08:30":"07:00",bed:"23:15"},oneDone:rnd()<.7,bed:wkend?"00:30":"23:15",habits:{duo:hb(.85),gym:gym?(rnd()<.2?"min":true):false,music:hb(.5),read:hb(.55),climb,outside,social,screens:rnd()<.35,late},waterL:[0.5,1.5,1.5,2.5][Math.floor(rnd()*4)],veg:[0,1.5,3.5,5][Math.floor(rnd()*4)],alcohol,sweets:[0,0,1,2][Math.floor(rnd()*4)],tags:[],note:"",done:true};
     d.sleepQ=clamp(6+(sleepH-7)*1.2-(lateCaf?1.5:0)-prevAlc*.6+(d.habits.screens?1:0)+(rnd()-.5)*3,1,10);
     d.stress=clamp(4+(late?2.5:0)-(wkend?1.5:0)-(climb?1:0)+(rnd()-.5)*3,1,10);
     d.energy=clamp(5+(d.sleepQ-6)*.6+(gym?.8:0)-prevAlc*.7+(rnd()-.5)*3,1,10);
     d.diet=clamp(6+(d.veg-3)*.6-d.sweets*.5+(rnd()-.5)*2,1,10);
     d.focus=clamp(5+(d.sleepQ-6)*.5-(d.stress-5)*.3+(rnd()-.5)*3,1,10);
-    d.happy=clamp(5.5+(social?1.2:0)+(climb?1:0)+(outside?.7:0)+(d.habits.music?.5:0)+(d.oneDone?.6:-.3)+(d.deep>=3?.5:0)-(d.stress-5)*.45+(d.sleepQ-6)*.3+(rnd()-.5)*2.5,1,10);
+    d.happy=clamp(5.5+(social?1.2:0)+(climb?1:0)+(outside?.7:0)+(d.habits.music?.5:0)+(d.oneDone?.6:-.3)-(d.stress-5)*.45+(d.sleepQ-6)*.3+(rnd()-.5)*2.5,1,10);
     if(rnd()<.05)d.tags.push("travel");d.sick=d.happy<=3&&rnd()<.5?2:rnd()<.06?1:0;if(late&&rnd()<.4)d.tags.push("deadline");
     out[date]=d;prevAlc=alcohol;
   }
