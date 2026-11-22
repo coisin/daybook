@@ -306,7 +306,7 @@ textarea.textin{resize:vertical;min-height:84px;line-height:1.45;font-family:inh
         <button class="btn ghost" id="addItem" style="margin-top:12px">Add item</button>
         <div class="restctl" id="restCtl"></div>
       </div>
-      <div class="footer-actions"><button class="btn ghost" id="openDetails">Edit all details for this day</button></div>
+      <div class="footer-actions"><button class="btn ghost" id="copyPrev" hidden>Same as yesterday</button><button class="btn ghost" id="openDetails">Edit all details for this day</button></div>
     </div>
 
     <div id="details" hidden>
@@ -583,6 +583,8 @@ function renderToday(){
   document.getElementById("details").hidden=!detailsOpen;
   if(detailsOpen){renderDetails();return}
   const d=entry(cur);const isToday=cur===todayStr();
+  // Offer copying the previous day only onto an empty day, so it can never overwrite anything.
+  document.getElementById("copyPrev").hidden=!!sample||hasData(d)||!hasData(entry(addDays(cur,-1)));
   const nc=document.getElementById("nightCard");
   const todos=dailyTodos(cur);const doneN=todos.filter(i=>done(d,i.id)).length;
   const p=planFor(cur);
@@ -1057,6 +1059,14 @@ document.getElementById("nightCard").addEventListener("click",e=>{if(e.target.cl
 document.getElementById("todoList").addEventListener("click",e=>{const b=e.target.closest(".todo");if(!b||sample)return;const id=b.dataset.id;edit(d=>cycle(d,id));renderToday()});
 document.getElementById("editListBtn").onclick=()=>{editorOpen=true;renderToday()};
 document.getElementById("closeEditor").onclick=()=>{editorOpen=false;renderToday()};
+// Fields that describe that particular day rather than a repeatable routine, so they aren't copied.
+const NO_COPY=["date","updated","done","note","bad","plan","oneDone","exp"];
+document.getElementById("copyPrev").onclick=()=>{
+  const prev=entry(addDays(cur,-1));if(!prev||hasData(entry(cur)))return;
+  const src=JSON.parse(JSON.stringify(prev));
+  edit(x=>{for(const[k,v] of Object.entries(src))if(!NO_COPY.includes(k))x[k]=v});
+  render();
+};
 document.getElementById("openDetails").onclick=()=>{detailsOpen=true;renderToday();window.scrollTo(0,0)};
 document.getElementById("closeDetails").onclick=()=>{detailsOpen=false;renderToday()};
 document.getElementById("addItem").onclick=()=>{settings.items.push({id:"i"+Date.now().toString(36),label:"New item",kind:"todo",days:[],min:""});saveSettings();renderEditor();const ins=document.querySelectorAll("#edList input");const last=ins[ins.length-1];if(last){last.focus();last.select()}};
