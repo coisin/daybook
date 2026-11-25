@@ -611,7 +611,7 @@ function renderToday(){
   const planLine=(p?`<div class="oneplan"><small>${isToday?"Today’s":"That day’s"} one thing</small>${esc(p.one)}${d&&d.oneDone!=null?(d.oneDone?" ✓":" ✗"):""}</div>`:"")+smallsHTML(cur,d,canTick);
   if(d&&d.done){
     const tsm=d.plan&&Array.isArray(d.plan.small)?d.plan.small.filter(Boolean):[];
-    const tp=d.plan&&d.plan.one?`<div class="oneplan"><small>Tomorrow’s one thing</small>${esc(d.plan.one)}</div>${tsm.length?`<ul class="smalls">${tsm.map(t=>`<li><span><span class="c"></span>${esc(t)}</span></li>`).join("")}</ul>`:""}`:"";
+    const tp=d.plan&&d.plan.one?`<div class="oneplan"><small>Tomorrow’s one thing</small>${esc(d.plan.one)}${tsm.length?`<small style="margin-top:4px">+ ${tsm.length} smaller thing${tsm.length===1?"":"s"}</small>`:""}</div>`:"";
     nc.innerHTML=`<h2>${isToday?"Tonight’s":"This day’s"} check-in is done</h2><p>${d.rest?"Rest day. ":d.sick===2?"Sick day. ":""}${todos.length?`${doneN} of ${todos.length} to-dos`:"No to-dos scheduled"}${d.happy!=null?`, happiness ${d.happy}`:""}.</p>${tp||planLine}<div class="row"><button class="ghostn" data-start="1">Redo check-in</button></div>`;
   }else{
     nc.innerHTML=`<h2>${isToday?"Bedtime check-in":"Check-in for this day"}</h2><p>${todos.length?`${doneN} of ${todos.length} to-dos ticked so far. `:""}About a minute, ending with a plan for tomorrow.</p>${planLine}<div class="row"><button class="startbtn" data-start="1">Start check-in</button></div>`;
