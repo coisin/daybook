@@ -699,6 +699,7 @@ let sv={on:false,i:0,steps:[],date:null};
 function buildSteps(date){
   const st=[];
   if(planFor(date))st.push({id:"onecheck"});
+  if(smallsFor(date).length)st.push({id:"smallcheck"});
   st.push({id:"health"});
   if(todosFor(date).length)st.push({id:"todos"});
   if(items().some(i=>i.kind==="track"&&scheduled(i,date)))st.push({id:"track"});
@@ -745,6 +746,10 @@ function renderStep(){
   if(s.id==="onecheck"){
     body.innerHTML=`<div class="sv-q">Did the one thing happen?</div><div class="sv-sub">Last night you said today’s one thing was:</div><div class="quote">${esc(p.one)}</div>${yn(d.oneDone)}`;
     next.hidden=d.oneDone==null;
+  }else if(s.id==="smallcheck"){
+    const sm=smallsFor(sv.date),dn=d.smallDone||[];
+    body.innerHTML=`<div class="sv-q">${p?"And the smaller things?":"Did the smaller things happen?"}</div><div class="sv-sub">Tick the ones that got done.</div><div class="svlist">${sm.map((t,i)=>`<button class="svitem" data-small="${i}" aria-pressed="${!!dn[i]}"><span class="box">${dn[i]?"✓":""}</span><span>${esc(t)}</span></button>`).join("")}</div>`;
+    skip.hidden=true;
   }else if(s.id==="health"){
     const opts=[[0,"Healthy","Feeling fine"],[1,"A bit off","Run down, tired, a cold coming on"],[2,"Sick","Streaks pause today, without using a rest day"]];
     body.innerHTML=`<div class="sv-q">How are you feeling physically?</div><div class="sv-sub">Tracking this means a bad week can be explained later.</div><div class="svlist">${opts.map(([v,l,s2])=>`<button class="svitem" data-sick="${v}" aria-pressed="${d.sick===v}"><span class="box">${d.sick===v?"✓":""}</span><span>${l}<small>${s2}</small></span></button>`).join("")}</div>`;
@@ -836,6 +841,7 @@ document.getElementById("svBody").addEventListener("keydown",e=>{
 document.getElementById("svBody").addEventListener("click",e=>{
   const s=sv.steps[sv.i];const b=e.target.closest("button");if(!b)return;
   if(b.dataset.addsmall){addSmallInput();return}
+  if(b.dataset.small!=null){const i=Number(b.dataset.small);edit(x=>{const a=(x.smallDone||[]).slice();a[i]=!a[i];x.smallDone=a},sv.date);renderStep();return}
   const adv=()=>setTimeout(()=>{if(sv.on&&sv.steps[sv.i]===s)go(1)},220);
   if(b.dataset.ck){const k=b.dataset.ck,v=Number(b.dataset.cv);edit(x=>{x[k]=x[k]===v?null:v},sv.date);renderStep();return}
   if(b.dataset.sick!=null){const v=Number(b.dataset.sick);edit(x=>{x.sick=v},sv.date);renderStep();adv();return}
